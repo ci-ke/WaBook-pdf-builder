@@ -7,3 +7,9 @@
 
 %% 代码块:浅灰背景,与正文区分
 \definecolor{shadecolor}{RGB}{240,240,240}
+
+%% 代码块超长行自动换行,不溢出页边距(fvset 修改 fancyvrb 全局默认,Highlighting 自动继承)
+%% 关键: pandoc 对"无语言标注"的代码块输出 LaTeX 内核 verbatim 环境(不走 fancyvrb),须重定向到 Verbatim 才受 fvset 控制
+\usepackage{fvextra}
+\fvset{breaklines=true,breakanywhere=true}
+\renewenvironment{verbatim}{\Verbatim}{\endVerbatim}

@@ -27,6 +27,9 @@ node build.mjs D:\books\my-book
 
 # 输出到指定目录
 node build.mjs D:\books\my-book D:\out
+
+# 详细模式(打印聚合进度、完整 pandoc 命令与内部过程)
+node build.mjs --verbose D:\books\my-book D:\out
 ```
 
 产物: `<PDF输出目录>/book.pdf`(可用环境变量 `PDF_NAME` 改名)

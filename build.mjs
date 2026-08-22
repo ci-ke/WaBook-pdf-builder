@@ -15,7 +15,11 @@ const HEADER_TEX = path.join(SELF_DIR, "header.tex");
 const PANDOC = process.env.PANDOC || "pandoc";
 const OUT_PDF_NAME = process.env.PDF_NAME || "book.pdf";
 
-const [bookDirArg, outDirArg] = process.argv.slice(2);
+// 详细模式: --verbose 或 -v 为选项(输出聚合进度、完整 pandoc 命令,并把 --verbose 透传给 pandoc)
+const rawArgs = process.argv.slice(2);
+const VERBOSE = rawArgs.includes("--verbose") || rawArgs.includes("-v");
+const posArgs = rawArgs.filter((a) => !a.startsWith("-"));
+const [bookDirArg, outDirArg] = posArgs;
 const bookDir = path.resolve(bookDirArg || process.cwd());
 const outDir = path.resolve(outDirArg || process.cwd());
 
@@ -103,6 +107,7 @@ for (const line of lines) {
   }
   if (file === "index.md") {
     cover = buildCover(filePath);
+    if (VERBOSE) console.log("[聚合] 封面:", file);
     continue;
   }
 
@@ -125,12 +130,13 @@ for (const line of lines) {
       .replace(/^\d+(?:\.\d+)+\s*[.:：]?\s*/, "")
       .replace(/^第\s*\d+\s*章\s*[：:.]?\s*/, "");
     srcLines.splice(titleIdx, 1);
-    if (level === 1) out.push("\\clearpage"); // 大章节从新页开始
+    out.push("\\clearpage"); // 章/节均从新页开始
     out.push(`${"#".repeat(level)} ${tText}${isTop ? " {-}" : ""}`);
   } else {
-    if (level === 1) out.push("\\clearpage"); // 大章节从新页开始
+    out.push("\\clearpage"); // 章/节均从新页开始
     out.push(`${"#".repeat(level)} ${m[2].trim()}${isTop ? " {-}" : ""}`);
   }
+  if (VERBOSE) console.log(`[聚合] ${file} -> ${"#".repeat(level)} ${titleLine ? titleLine.replace(/^#{1,2}\s+/, "").trim() : m[2].trim()}`);
   body = srcLines.join("\n");
   // 清洗文件内部其余标题:剥离手写编号前缀;前置文档(isTop)内部标题也转粗体(不进目录)
   body = cleanInnerHeadings(body, isTop);
@@ -169,6 +175,10 @@ const args = [
   "--number-sections",
   "--syntax-highlighting=tango",
 ];
+if (VERBOSE) {
+  args.push("--verbose");
+  console.log("[pandoc]", PANDOC, args.join(" "));
+}
 console.log("图书目录:", bookDir);
 console.log("输出目录:", outDir);
 console.log("调用 pandoc:", PANDOC);
