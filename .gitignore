@@ -1,0 +1,9 @@
+# 构建产物
+*.pdf
+book.md
+full.*
+
+# 调试残留
+preview/
+aux/
+run/

@@ -1,0 +1,9 @@
+%% 目录结束后另起一页再开始正文;书签带章节编号(均在 \begin{document} 后执行,此时 hyperref 已加载)
+\AtBeginDocument{%
+  \let\oldtoc\tableofcontents
+  \renewcommand{\tableofcontents}{\oldtoc\clearpage}%
+  \hypersetup{bookmarksnumbered=true}%
+}
+
+%% 代码块:浅灰背景,与正文区分
+\definecolor{shadecolor}{RGB}{240,240,240}
