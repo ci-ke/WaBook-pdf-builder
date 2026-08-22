@@ -16,20 +16,20 @@ WaBook / mdBook 结构 markdown 图书的一键 PDF 构建工具。
 ## 用法
 
 ```bash
-node build.mjs <图书根目录> [PDF输出目录]
+python build.py <图书根目录> [PDF输出目录]
 ```
 
 示例:
 
 ```bash
 # 输出到当前目录
-node build.mjs D:\books\my-book
+python build.py D:\books\my-book
 
 # 输出到指定目录
-node build.mjs D:\books\my-book D:\out
+python build.py D:\books\my-book D:\out
 
 # 详细模式(打印聚合进度、完整 pandoc 命令与内部过程)
-node build.mjs --verbose D:\books\my-book D:\out
+python build.py --verbose D:\books\my-book D:\out
 ```
 
 产物: `<PDF输出目录>/book.pdf`(可用环境变量 `PDF_NAME` 改名)
@@ -38,7 +38,7 @@ node build.mjs --verbose D:\books\my-book D:\out
 
 ```bash
 export PANDOC="D:\Software\pandoc\pandoc.exe"
-node build.mjs D:\books\my-book D:\out
+python build.py D:\books\my-book D:\out
 ```
 
 ## 环境变量
@@ -93,7 +93,7 @@ node build.mjs D:\books\my-book D:\out
 
 | # | 假设 | 代码位置 | 若不满足 |
 |---|---|---|---|
-| 1 | 存在 `index.md` 作为封面 | `build.mjs` 中 `file === "index.md"` | 无此文件则全书无封面;改名需改此处 |
+| 1 | 存在 `index.md` 作为封面 | `build.py` 中 `file == "index.md"` | 无此文件则全书无封面;改名需改此处 |
 | 2 | 无 `*` 顶层条目 = 前置文档(不编号) | `isTop` 判定 | 无前置文档的书自然跳过 |
 | 3 | 目录只需两级(章/节) | `cleanInnerHeadings` 三级转粗体 | 需要三级目录时改为保留 `###` |
 | 4 | 标题带手写编号前缀(`3.4. `、`第 3 章 `) | 两处前缀剥离正则 | 无前缀的书原样保留(no-op) |
@@ -105,7 +105,7 @@ node build.mjs D:\books\my-book D:\out
 
 | 文件 | 作用 |
 |---|---|
-| `build.mjs` | 聚合章节 + 调用 pandoc 编译(单入口) |
+| `build.py` | 聚合章节 + 调用 pandoc 编译(单入口,Python 3 + 类型注解) |
 | `header.tex` | LaTeX 定制:目录后另起一页、代码块灰底、书签编号 |
 
 中间文件在系统临时目录,编译后自动清理;不在图书目录留下任何文件。
