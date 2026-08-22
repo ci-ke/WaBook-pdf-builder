@@ -10,6 +10,10 @@
     PANDOC   pandoc 可执行文件路径(默认 "pandoc", 需在 PATH 中)
     PDF_NAME 输出 PDF 文件名(默认 "book.pdf")
 
+解析方式:按 SUMMARY.md 的顺序与包含关系展开各 md 文件,标题按原文格式
+透传(章 = #、节 = ##、三级 = ###);目录只有 SUMMARY 中的条目,前置文档
+(译者序/前言)内部的次级标题转为粗体段落以免进入目录。
+
 不改动图书仓库任何文件;聚合中间文件在系统临时目录,编译后自动清理。
 """
 from __future__ import annotations
@@ -24,13 +28,10 @@ from pathlib import Path
 
 SELF_DIR: Path = Path(__file__).resolve().parent
 HEADER_TEX: Path = SELF_DIR / "header.tex"
-OUT_PDF_NAME: str = "book.pdf"
 
 FENCE_RE: re.Pattern[str] = re.compile(r"^(`{3,}|~{3,})")
 VERBATIM_INDENT_RE: re.Pattern[str] = re.compile(r"^( {4}|\t)")
-INNER_HEADING_RE: re.Pattern[str] = re.compile(r"^(#{2,6})\s+(.+)$")
-NUM_PREFIX_RE: re.Pattern[str] = re.compile(r"^\d+(?:\.\d+)+\s*[.:：]?\s*")
-ZH_PREFIX_RE: re.Pattern[str] = re.compile(r"^第\s*\d+\s*章\s*[：:.]?\s*")
+INNER_HEADING_RE: re.Pattern[str] = re.compile(r"^#{2,6}\s+(.+)$")
 MATH_DOLLAR_RE: re.Pattern[str] = re.compile(r"\$([^$\n]*\^[^$\n]*)\$")
 SUMMARY_ENTRY_RE: re.Pattern[str] = re.compile(r"^(\s*)\*?\s*\[([^\]]+)\]\(([^)]+)\)\s*$")
 
@@ -55,10 +56,9 @@ def sanitize(body: str) -> str:
     return "\n".join(out)
 
 
-def clean_inner_headings(body: str, flatten_all: bool = False) -> str:
-    """清洗文件内部(非首个)标题行:剥离手写编号前缀,避免与自动编号重复;
-    三级及以下标题转为粗体段落(不进目录);flatten_all=True 时二级标题
-    也转粗体(用于译者序/前言等前置文档,其内部小节不进目录)。"""
+def flatten_inner_headings(body: str) -> str:
+    """前置文档(译者序/前言)专用:将文件内部所有次级标题(## 及以上)转为
+    粗体段落,使其进入目录(前置文档本身是 SUMMARY 顶层条目,内部小节不属于目录)。"""
     lines: list[str] = body.split("\n")
     in_fence = False
     out: list[str] = []
@@ -70,49 +70,31 @@ def clean_inner_headings(body: str, flatten_all: bool = False) -> str:
             continue
         hm = None if in_fence else INNER_HEADING_RE.match(ln)
         if hm:
-            text: str = hm.group(2).strip()  # 标题文本(## 标记与空白之后的内容)
-            text = NUM_PREFIX_RE.sub("", text)
-            text = ZH_PREFIX_RE.sub("", text).strip()
-            if flatten_all or len(hm.group(1)) >= 3:
-                out.append(f"**{text}**")
-            else:
-                out.append(f"## {text}")
+            out.append(f"**{hm.group(1).strip()}**")
         else:
             out.append(ln)
     return "\n".join(out)
 
 
 def build_cover(file_path: Path) -> str:
-    """index.md 单独处理:作为封面(首页),标题转粗体,不进目录/书签/编号。"""
+    """index.md 作为封面(首页):标题转粗体段落,其余内容原样。"""
     body: str = file_path.read_text(encoding="utf-8").lstrip("\ufeff")
     body = re.sub(r"^#\s+(.+)$", r"**\1**", body, count=1, flags=re.M)
     body = body.replace("](../", "](./")
     return sanitize(body)
 
 
-def split_src_lines(body: str) -> list[str]:
-    """按行拆分,兼容 \\n 与 \\r\\n 行尾。"""
-    return body.replace("\r\n", "\n").split("\n")
-
-
-def find_first_title_line(src_lines: list[str]) -> tuple[str | None, int]:
-    """定位文件中首个标题行(H1/H2,忽略围栏代码块内),返回 (行文本, 行号)。"""
-    in_fence = False
-    for i, ln in enumerate(src_lines):
-        stripped: str = ln.lstrip()
-        if FENCE_RE.match(stripped):
-            in_fence = not in_fence
-            continue
-        if not in_fence and re.match(r"^#{1,2}\s+\S", ln):
-            return ln, i
-    return None, -1
-
-
-def strip_title_prefixes(text: str) -> str:
-    """去掉标题中手写的编号前缀(如 "3.4. "、"第 3 章 "),使自动编号唯一。"""
-    text = NUM_PREFIX_RE.sub("", text).strip()
-    text = ZH_PREFIX_RE.sub("", text).strip()
-    return text
+def load_chapter(file_path: Path, flatten: bool) -> str:
+    """读取章节文件,按规则预处理后返回:
+    - 去 BOM;
+    - 图片相对路径 ../images/.. -> images/..(聚合文件在临时目录,由 --resource-path 指回图书目录);
+    - 前置文档(flatten=True)内部次级标题转粗体;
+    - 文本清洗(sanitize)。"""
+    body: str = file_path.read_text(encoding="utf-8").lstrip("\ufeff")
+    body = body.replace("](../", "](./")
+    if flatten:
+        body = flatten_inner_headings(body)
+    return sanitize(body)
 
 
 def main() -> int:
@@ -123,7 +105,7 @@ def main() -> int:
     book_dir: Path = Path(pos_args[0]).resolve() if pos_args else Path.cwd()
     out_dir: Path = Path(pos_args[1]).resolve() if len(pos_args) > 1 else Path.cwd()
     pandoc: str = os.environ.get("PANDOC", "pandoc")
-    pdf_name: str = os.environ.get("PDF_NAME", OUT_PDF_NAME)
+    pdf_name: str = os.environ.get("PDF_NAME", "book.pdf")
 
     summary_path: Path = book_dir / "SUMMARY.md"
     if not summary_path.exists():
@@ -131,7 +113,7 @@ def main() -> int:
         print("用法: python build.py <图书根目录> [PDF输出目录]", file=sys.stderr)
         return 1
 
-    # ---- 聚合所有章节为单一 markdown(带层级标题) ----
+    # ---- 按 SUMMARY.md 展开各章节 ----
     summary: str = summary_path.read_text(encoding="utf-8")
     out: list[str] = []
     cover: str = ""
@@ -157,36 +139,19 @@ def main() -> int:
             continue
 
         is_top: bool = indent == 0 and not line.lstrip().startswith("*")
-        level: int = 1 if (is_top or indent == 0) else 2  # 前置/章 => H1, 节 => H2
-
-        body: str = file_path.read_text(encoding="utf-8").lstrip("\ufeff")
-        src_lines: list[str] = split_src_lines(body)
-        title_line: str | None
-        title_idx: int
-        title_line, title_idx = find_first_title_line(src_lines)
-        if title_line is not None:
-            t_text: str = strip_title_prefixes(re.sub(r"^#{1,2}\s+", "", title_line).strip())
-            del src_lines[title_idx]
-            out.append("\\clearpage")  # 章/节均从新页开始
-            out.append(f"{'#' * level} {t_text}{' {-}' if is_top else ''}")
-            if verbose:
-                print(f"[聚合] {file} -> {'#' * level} {t_text}")
-        else:
-            out.append("\\clearpage")  # 章/节均从新页开始
-            out.append(f"{'#' * level} {m.group(2).strip()}{' {-}' if is_top else ''}")
-            if verbose:
-                print(f"[聚合] {file} -> {'#' * level} {m.group(2).strip()}")
-
-        body = "\n".join(src_lines)
-        # 清洗文件内部其余标题:剥离手写编号前缀;前置文档内部标题也转粗体
-        body = clean_inner_headings(body, flatten_all=is_top)
-        # 图片路径:聚合文件位于临时目录,../images/.. 需改为 images/..(由 --resource-path 指回图书目录)
-        body = body.replace("](../", "](./")
-        body = sanitize(body)
-        out.append(body)
+        body: str = load_chapter(file_path, flatten=is_top)
+        out.append("\\clearpage\n\n" + body)  # 每个 SUMMARY 条目均从新页开始
         out.append("")
+        if verbose:
+            print("[聚合]", file, "(前置)" if is_top else "")
 
-    final_md: str = "\n\n".join(x for x in (cover, "\\clearpage\n\n\\tableofcontents", "\n".join(out)) if x)
+    # ---- 组装:封面(可选)→ 目录 → 正文 ----
+    blocks: list[str] = []
+    if cover:
+        blocks.append(cover)
+    blocks.append("\\clearpage\n\n\\tableofcontents")
+    blocks.append("\n".join(out))
+    final_md: str = "\n\n".join(blocks)
 
     # ---- 中间文件放系统临时目录(不污染图书目录) ----
     tmp_dir: Path = Path(tempfile.mkdtemp(prefix="wabook-pdf-"))
@@ -209,7 +174,6 @@ def main() -> int:
         "-V", "fontsize=12pt",
         "-V", "linestretch=1.25",
         "-V", "geometry:margin=2.5cm",
-        "--number-sections",
         "--syntax-highlighting=tango",
     ]
     if verbose:
