@@ -106,6 +106,7 @@ def main() -> int:
     out_dir: Path = Path(pos_args[1]).resolve() if len(pos_args) > 1 else Path.cwd()
     pandoc: str = os.environ.get("PANDOC", "pandoc")
     pdf_name: str = os.environ.get("PDF_NAME", "book.pdf")
+    cjk_font: str = os.environ.get("CJK_FONT", "SimHei")
 
     summary_path: Path = book_dir / "SUMMARY.md"
     if not summary_path.exists():
@@ -169,7 +170,7 @@ def main() -> int:
         "-f", "markdown-tex_math_dollars",
         f"--include-in-header={HEADER_TEX}",
         "-V", "mainfont=Cambria",
-        "-V", "CJKmainfont=SimSun",
+        "-V", f"CJKmainfont={cjk_font}",
         "-V", "monofont=Consolas",
         "-V", "fontsize=12pt",
         "-V", "linestretch=1.25",

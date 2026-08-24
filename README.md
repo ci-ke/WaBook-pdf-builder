@@ -9,7 +9,7 @@ WaBook / mdBook 结构 markdown 图书的一键 PDF 构建工具。
 |---|---|
 | **pandoc 3.x** | 从 [pandoc.org](https://pandoc.org) 下载便携版解压即可;可用环境变量 `PANDOC` 指定可执行文件路径 |
 | **XeLaTeX** | 推荐 MiKTeX;编译中缺失宏包时自动下载安装(`--enable-installer`,不改任何配置) |
-| **系统中文字体** | 正文 Cambria、中文 SimSun、代码 Consolas(Windows 自带) |
+| **系统中文字体** | 正文 Cambria、中文 SimHei(黑体,可用 `CJK_FONT` 环境变量切换)、代码 Consolas(均为 Windows 自带) |
 
 ## 用法
 
@@ -33,6 +33,7 @@ python build.py --verbose D:\books\my-book  # 详细模式
 |---|---|---|
 | `PANDOC` | `pandoc` | pandoc 可执行文件路径(PATH 中可直接调用时无需设置) |
 | `PDF_NAME` | `book.pdf` | 输出 PDF 文件名 |
+| `CJK_FONT` | `SimHei` | 中文字体名(如 `Noto Serif SC`、`STZhongsong` 等,需系统已安装) |
 
 ## 解析方式
 
