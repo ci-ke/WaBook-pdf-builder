@@ -11,6 +11,11 @@ WaBook / mdBook 结构 markdown 图书的一键 PDF 构建工具。
 | **XeLaTeX** | 推荐 MiKTeX;编译中缺失宏包时自动下载安装(`--enable-installer`,不改任何配置) |
 | **系统中文字体** | 正文 Cambria、中文 SimHei(黑体,可用 `CJK_FONT` 环境变量切换)、代码 Consolas(均为 Windows 自带) |
 
+## 测试图书
+
+本项目的构建验证样例是 [gopl-zh.github.com](https://github.com/gopl-zh/gopl-zh.github.com)
+——《The Go Programming Language》中文翻译版（mdBook 结构，含大量中文、代码与数学符号）。
+
 ## 用法
 
 ```bash

@@ -32,13 +32,70 @@ HEADER_TEX: Path = SELF_DIR / "header.tex"
 FENCE_RE: re.Pattern[str] = re.compile(r"^(`{3,}|~{3,})")
 VERBATIM_INDENT_RE: re.Pattern[str] = re.compile(r"^( {4}|\t)")
 INNER_HEADING_RE: re.Pattern[str] = re.compile(r"^#{2,6}\s+(.+)$")
-MATH_DOLLAR_RE: re.Pattern[str] = re.compile(r"\$([^$\n]*\^[^$\n]*)\$")
 SUMMARY_ENTRY_RE: re.Pattern[str] = re.compile(r"^(\s*)\*?\s*\[([^\]]+)\]\(([^)]+)\)\s*$")
+
+# ---- 正文清洗用的正则 ----
+CODE_SPAN_RE: re.Pattern[str] = re.compile(r"(`[^`\n]*`|``[^`\n]*``)")
+# pandoc 把 <sup>/<i>/<b> 等 HTML 标签当作 RawInline 输出到 PDF 时会被丢弃,
+# 这里统一转为 pandoc 原生标记;生成的上标/下标开闭符先用哨兵 \x01/\x02 占位,
+# 等裸 ^ ~ 全部转义后再恢复,避免自生成的标记被再次转义。
+STRONG_HTML_RE: re.Pattern[str] = re.compile(r"<\s*(?:strong|b)\s*>(.*?)<\s*/\s*(?:strong|b)\s*>", re.I | re.S)
+EMPH_HTML_RE: re.Pattern[str] = re.compile(r"<\s*(?:em|i)\s*>(.*?)<\s*/\s*(?:em|i)\s*>", re.I | re.S)
+# 原书示例路径惯用 <u><i>gopl.io/ch1/server1</i></u>:统一转行内代码样式(下划线在 PDF 无渲染)
+UL_EMPH_HTML_RE: re.Pattern[str] = re.compile(r"<\s*u\s*>\s*<\s*i\s*>(.*?)<\s*/\s*i\s*>\s*<\s*/\s*u\s*>", re.I | re.S)
+SUP_HTML_RE: re.Pattern[str] = re.compile(r"<\s*sup\s*>(.*?)<\s*/\s*sup\s*>", re.I | re.S)
+SUB_HTML_RE: re.Pattern[str] = re.compile(r"<\s*sub\s*>(.*?)<\s*/\s*sub\s*>", re.I | re.S)
+# $2^n$ 这类"简单幂"公式:$base^exp$,base 不含 \ _ { } $ ^ ~ 与空白,
+# exp 仅限字母/数字/+-(如 2^n、2^64-1、O(n^2),exp 非贪婪防吞相邻内容)
+MATH_POW_RE: re.Pattern[str] = re.compile(r"\$([^\s\\_{}~$^]+)\^([0-9A-Za-z+-]+?)\$")
+# 其余 $...$ 公式:保留为字面文本(可读),内部 ^ ~ _ 转义防 pandoc 误解析
+MATH_LITERAL_RE: re.Pattern[str] = re.compile(r"\$([^$\n]+)\$")
+# 转义后剩余的裸 ^ ~(如 §8.2 的 ^C/^D 终端提示):防 pandoc 超尾/下尾扩展跨段误配对
+BARE_MARK_RE: re.Pattern[str] = re.compile(r"(?<!\\)([\^~])")
+
+SUP_SENTINEL: str = "\x01"
+SUB_SENTINEL: str = "\x02"
+
+
+def esc_math(s: str) -> str:
+    """数学/上标内容转义:反斜杠、^、~、_ 都转为字面(防 pandoc 误解析)。"""
+    return s.replace("\\", "\\\\").replace("^", r"\^").replace("~", r"\~").replace("_", r"\_")
+
+
+def sanitize_line(line: str) -> str:
+    """单行正文清洗:HTML 装饰标签 -> pandoc 原生标记;公式分类处理;裸 ^/~ 转义。
+
+    顺序很重要:
+    1. 行内代码先占位保护(其内容不受任何规则影响);
+    2. strong/em/sup/sub/<sup> 式公式 -> pandoc 原生标记(上/下标记哨兵占位);
+    3. $...$ 简单幂(2^n)转上标,其余公式保留字面;
+    4. 剩余裸 ^ ~ 全部转义(否则 pandoc 会把一行内两个 ^ 误配成上标,
+       吞掉中间整段正文——这是 $2^n$ 公式格式混乱的根源);
+    5. 恢复哨兵与行内代码。"""
+    codes: list[str] = []
+
+    def hold_code(m: re.Match[str]) -> str:
+        codes.append(m.group(0))
+        return f"\x00{len(codes) - 1}\x00"
+
+    s = CODE_SPAN_RE.sub(hold_code, line)
+    s = UL_EMPH_HTML_RE.sub(lambda m: f"`{m.group(1)}`", s)  # 先于 STRONG/EMPH,避免 <i> 被二次转换
+    s = STRONG_HTML_RE.sub(lambda m: f"**{esc_math(m.group(1))}**", s)
+    s = EMPH_HTML_RE.sub(lambda m: f"*{esc_math(m.group(1))}*", s)
+    s = SUP_HTML_RE.sub(lambda m: f"{SUP_SENTINEL}{esc_math(m.group(1))}{SUP_SENTINEL}", s)
+    s = SUB_HTML_RE.sub(lambda m: f"{SUB_SENTINEL}{esc_math(m.group(1))}{SUB_SENTINEL}", s)
+    s = MATH_POW_RE.sub(lambda m: f"{m.group(1)}{SUP_SENTINEL}{m.group(2)}{SUP_SENTINEL}", s)
+    s = MATH_LITERAL_RE.sub(lambda m: f"${esc_math(m.group(1))}$", s)
+    s = BARE_MARK_RE.sub(lambda m: "\\" + m.group(1), s)
+    s = s.replace(SUP_SENTINEL, "^").replace(SUB_SENTINEL, "~")
+    for i, code in enumerate(codes):
+        s = s.replace(f"\x00{i}\x00", code)
+    return s
 
 
 def sanitize(body: str) -> str:
     """普通文本清洗:裸 \\r\\n 字面包为行内代码(防 LaTeX 误解析);
-    含 ^ 的 $...$ 为刻意数学公式,转 \\(...\\) 分隔符。"""
+    HTML 标签、$...$ 公式等按 sanitize_line 规则处理;代码块/缩进块不动。"""
     lines: list[str] = body.split("\n")
     in_fence = False
     out: list[str] = []
@@ -49,8 +106,7 @@ def sanitize(body: str) -> str:
             out.append(ln)
             continue
         if not in_fence and not VERBATIM_INDENT_RE.match(ln):
-            out.append(MATH_DOLLAR_RE.sub(lambda m: r"\(" + m.group(1) + r"\)",
-                       ln.replace(r"\r\n", r"`\r\n`")))
+            out.append(sanitize_line(ln.replace(r"\r\n", r"`\r\n`")))
         else:
             out.append(ln)
     return "\n".join(out)

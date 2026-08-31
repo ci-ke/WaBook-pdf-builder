@@ -1,9 +1,44 @@
-# 构建产物
+# ---- 构建产物 ----
+out/
 *.pdf
 book.md
 full.*
 
-# 调试残留
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# ---- LaTeX / pandoc 编译中间产物 ----
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+*.xdv
+
+# ---- 调试残留 ----
 preview/
 aux/
 run/
+
+# ---- 本机环境提示词（含本机路径，不提交） ----
+AGENTS.md
+
+# ---- 编辑器 / 系统 ----
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 环境与临时文件 ----
+.env
+*.tmp
+*.bak
