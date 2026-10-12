@@ -14,4 +14,12 @@
 %% 关键: pandoc 对"无语言标注"的代码块输出 LaTeX 内核 verbatim 环境(不走 fancyvrb),须重定向到 Verbatim 才受 fvset 控制
 \usepackage{fvextra}
 \fvset{breaklines=true,breakanywhere=true}
-\renewenvironment{verbatim}{\Verbatim}{\endVerbatim}
+%% 无语言代码块同样套 Shaded(pandoc 只给有语言的代码块生成该环境),背景与高亮代码块一致;
+%% pandoc 仅在文档含高亮代码块时才定义 Shaded,全书无高亮块时用下方兜底定义
+\usepackage{framed}
+\makeatletter
+\@ifundefined{Shaded}{\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}}{}
+\makeatother
+%% \VerbatimEnvironment 须在 \begin{Shaded} 之前调用:在环境名还是 verbatim 时锁定
+%% fancyvrb 的扫描目标(\FV@EnvironName),否则扫描器会去找 \end{Shaded} 直到读爆文件
+\renewenvironment{verbatim}{\VerbatimEnvironment\begin{Shaded}\Verbatim}{\endVerbatim\end{Shaded}}
