@@ -223,9 +223,15 @@ def main() -> int:
         "--pdf-engine=xelatex",
         "--pdf-engine-opt=--enable-installer",
         f"--resource-path={book_dir}",
-        "-f", "markdown-tex_math_dollars",
+        # -smart: pandoc 的 smart 扩展把直引号 " 智能配对为弯引号 ``/''，
+        # 改变了原文码位;关闭以保持字面
+        "-f", "markdown-tex_math_dollars-smart",
         f"--include-in-header={HEADER_TEX}",
         "-V", "mainfont=Cambria",
+        # 清空 XeTeX 的 tex-text 输入映射:fontspec 对正文字体默认启用它,
+        # 会把 " (U+0022) 逐字符改写为弯引号 ” (U+201D)、' 改写为 ’ 等,
+        # 即使 pandoc 侧已关 smart 也会在 XeLaTeX 层再次替换;置空以尊重原文
+        "-V", "mainfontoptions=Mapping=",
         "-V", f"CJKmainfont={cjk_font}",
         "-V", "monofont=Consolas",
         "-V", "fontsize=12pt",
